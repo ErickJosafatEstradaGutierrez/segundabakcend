@@ -79,7 +79,7 @@ apiRouter.get('/usuarios', async (req, res) => {
   }
 });
 
-// DELIVERY
+// DELIVERIES
 apiRouter.get('/deliveries', async (req, res) => {
   try {
     const deliveries = await sql`
@@ -133,8 +133,8 @@ apiRouter.patch('/paquetes/:id', async (req, res) => {
     const [paqueteActualizado] = await sql`
       UPDATE paquetes SET status = ${status} WHERE id = ${id} RETURNING id, nombre_repartidor, direccion, status
     `;
-
     if (!paqueteActualizado) return res.status(404).json({ error: 'Paquete no encontrado' });
+
     res.status(200).json(paqueteActualizado);
   } catch (error) {
     console.error('Error actualizando paquete:', error);
@@ -160,7 +160,7 @@ apiRouter.patch('/usuarios/:id/status', async (req, res) => {
 });
 
 // ------------------- USAR EL ROUTER -------------------
-app.use('/api', apiRouter);
+app.use('/api', apiRouter); // solo aquí se mantiene /api
 
 // ------------------- INICIAR SERVIDOR -------------------
 httpServer.listen(port, () => {
