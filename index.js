@@ -12,15 +12,16 @@ const port = process.env.PORT || 4000;
 // Servidor HTTP para socket.io
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
+  path: '/proyecto2/api/socket.io',
   cors: {
-    origin: 'http://localhost:4200',
+    origin: ['http://localhost:4200', 'https://72.60.31.237' ],
     methods: ['GET', 'POST', 'PATCH'],
     credentials: true
   }
 });
 
 app.use(cors({
-  origin: 'http://localhost:4200',
+  origin: 'https://72.60.31.237:4200',
   credentials: true
 }));
 app.use(bodyParser.json());
@@ -190,5 +191,5 @@ app.patch('/usuarios/:id/status', async (req, res) => {
 
 // ------------------- INICIAR SERVIDOR -------------------
 httpServer.listen(port, () => {
-  console.log(`Backend corriendo en http://localhost:${port}`);
+  console.log(`Backend corriendo en https://72.60.31.237:${port}`);
 });
