@@ -12,7 +12,7 @@ const port = process.env.PORT || 4000;
 // Servidor HTTP para socket.io
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  path: '/api/socket.io',
+  path: '/socket.io', // ruta limpia para Socket.IO
   cors: {
     origin: ['https://72.60.31.237'],
     methods: ['GET', 'POST', 'PATCH'],
@@ -31,21 +31,10 @@ app.use(bodyParser.json());
 io.on('connection', (socket) => {
   console.log('Cliente conectado:', socket.id);
 
-  // Recibir ubicación del delivery
   socket.on('updateLocation', async (data) => {
     try {
       const { userId, lat, lng } = data;
-
-      // Guardar ubicación en la BD
-      await sql`
-        UPDATE usuarios
-        SET ubicacion = ${`${lat},${lng}`}
-        WHERE id = ${userId}
-      `;
-
-      console.log(`Ubicación actualizada para usuario ${userId}: ${lat}, ${lng}`);
-
-      // Emitir la ubicación a todos los clientes (opcional)
+      await sql`UPDATE usuarios SET ubicacion = ${`${lat},${lng}`} WHERE id = ${userId}`;
       io.emit('locationUpdated', { userId, lat, lng });
     } catch (err) {
       console.error('Error guardando ubicación:', err);
@@ -58,20 +47,16 @@ io.on('connection', (socket) => {
 });
 // ---------------------------------------------------
 
+// ------------------- ROUTER API -------------------
+const apiRouter = express.Router();
+
 // LOGIN
-app.post('/api/login', async (req, res) => {
+apiRouter.post('/login', async (req, res) => {
   const { usuario, contrasena } = req.body;
-  if (!usuario || !contrasena) {
-    return res.status(400).json({ error: 'Usuario y contraseña son requeridos' });
-  }
+  if (!usuario || !contrasena) return res.status(400).json({ error: 'Usuario y contraseña son requeridos' });
 
   try {
-    const result = await sql`
-      SELECT usuario, contrasena, rol
-      FROM usuarios
-      WHERE usuario = ${usuario}
-      LIMIT 1
-    `;
+    const result = await sql`SELECT usuario, contrasena, rol FROM usuarios WHERE usuario = ${usuario} LIMIT 1`;
     if (result.length === 0) return res.status(401).json({ error: 'Usuario no encontrado' });
     const user = result[0];
     if (user.contrasena !== contrasena) return res.status(401).json({ error: 'Contraseña incorrecta' });
@@ -83,8 +68,8 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// GET /usuarios
-app.get('/api/usuarios', async (req, res) => {
+// USUARIOS
+apiRouter.get('/usuarios', async (req, res) => {
   try {
     const usuarios = await sql`SELECT usuario, status, ubicacion FROM usuarios`;
     res.json(usuarios);
@@ -94,8 +79,8 @@ app.get('/api/usuarios', async (req, res) => {
   }
 });
 
-// GET /deliveries
-app.get('/api/deliveries', async (req, res) => {
+// DELIVERY
+apiRouter.get('/deliveries', async (req, res) => {
   try {
     const deliveries = await sql`
       SELECT id, usuario as nombre,
@@ -111,8 +96,8 @@ app.get('/api/deliveries', async (req, res) => {
   }
 });
 
-// ENDPOINT PARA PAQUETES
-app.post('/api/paquetes', async (req, res) => {
+// PAQUETES
+apiRouter.post('/paquetes', async (req, res) => {
   try {
     const { nombre_repartidor, direccion } = req.body;
     if (!nombre_repartidor || !direccion) return res.status(400).json({ error: 'Nombre repartidor y ubicación son requeridos' });
@@ -129,14 +114,9 @@ app.post('/api/paquetes', async (req, res) => {
   }
 });
 
-// GET /paquetes
-app.get('/api/paquetes', async (req, res) => {
+apiRouter.get('/paquetes', async (req, res) => {
   try {
-    const paquetes = await sql`
-      SELECT id, nombre_repartidor, direccion, status
-      FROM paquetes
-      ORDER BY id ASC
-    `;
+    const paquetes = await sql`SELECT id, nombre_repartidor, direccion, status FROM paquetes ORDER BY id ASC`;
     res.status(200).json(paquetes);
   } catch (error) {
     console.error('Error al obtener paquetes:', error);
@@ -144,18 +124,14 @@ app.get('/api/paquetes', async (req, res) => {
   }
 });
 
-// PATCH /paquetes/:id
-app.patch('/api/paquetes/:id', async (req, res) => {
+apiRouter.patch('/paquetes/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
     if (!status) return res.status(400).json({ error: 'El campo status es requerido' });
 
     const [paqueteActualizado] = await sql`
-      UPDATE paquetes
-      SET status = ${status}
-      WHERE id = ${id}
-      RETURNING id, nombre_repartidor, direccion, status
+      UPDATE paquetes SET status = ${status} WHERE id = ${id} RETURNING id, nombre_repartidor, direccion, status
     `;
 
     if (!paqueteActualizado) return res.status(404).json({ error: 'Paquete no encontrado' });
@@ -166,21 +142,14 @@ app.patch('/api/paquetes/:id', async (req, res) => {
   }
 });
 
-// PATCH /usuarios/:id/status
-app.patch('/api/usuarios/:id/status', async (req, res) => {
+// USUARIOS STATUS
+apiRouter.patch('/usuarios/:id/status', async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
-
   if (!['activo', 'off'].includes(status)) return res.status(400).json({ error: 'Estado inválido' });
 
   try {
-    const result = await sql`
-      UPDATE usuarios
-      SET status = ${status}
-      WHERE id = ${id}
-      RETURNING id, usuario, status
-    `;
-
+    const result = await sql`UPDATE usuarios SET status = ${status} WHERE id = ${id} RETURNING id, usuario, status`;
     if (result.length === 0) return res.status(404).json({ error: 'Usuario no encontrado' });
 
     res.json({ message: 'Estado actualizado', usuario: result[0] });
@@ -189,6 +158,9 @@ app.patch('/api/usuarios/:id/status', async (req, res) => {
     res.status(500).json({ error: 'Error al actualizar usuario' });
   }
 });
+
+// ------------------- USAR EL ROUTER -------------------
+app.use('/api', apiRouter);
 
 // ------------------- INICIAR SERVIDOR -------------------
 httpServer.listen(port, () => {
