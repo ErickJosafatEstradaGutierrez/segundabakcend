@@ -1,3 +1,4 @@
+// backend.js
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -9,42 +10,44 @@ import { Server } from 'socket.io';
 const app = express();
 const port = process.env.PORT || 4000;
 
-// Servidor HTTP para socket.io
+// ---------------- CONFIGURACIÓN CORS ----------------
+const FRONTEND_ORIGINS = [
+  'http://localhost:4200',
+  'https://72.60.31.237/proyecto2'
+];
+
+app.use(cors({
+  origin: FRONTEND_ORIGINS,
+  credentials: true
+}));
+app.use(bodyParser.json());
+
+// ---------------- RUTA BASE ----------------
+const BASE = '/proyecto2';
+
+// ---------------- SOCKET.IO ----------------
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  path: '/proyecto2/api/socket.io',
+  path: `${BASE}/api/socket.io`,
   cors: {
-    origin: ['http://localhost:4200', 'https://72.60.31.237' ],
+    origin: FRONTEND_ORIGINS,
     methods: ['GET', 'POST', 'PATCH'],
     credentials: true
   }
 });
 
-app.use(cors({
-  origin: 'https://72.60.31.237:4200',
-  credentials: true
-}));
-app.use(bodyParser.json());
-
-// ------------------- SOCKET.IO -------------------
 io.on('connection', (socket) => {
   console.log('Cliente conectado:', socket.id);
 
-  // Recibir ubicación del delivery
   socket.on('updateLocation', async (data) => {
     try {
       const { userId, lat, lng } = data;
-
-      // Guardar ubicación en la BD
       await sql`
         UPDATE usuarios
         SET ubicacion = ${`${lat},${lng}`}
         WHERE id = ${userId}
       `;
-
       console.log(`Ubicación actualizada para usuario ${userId}: ${lat}, ${lng}`);
-
-      // Emitir la ubicación a todos los clientes (opcional)
       io.emit('locationUpdated', { userId, lat, lng });
     } catch (err) {
       console.error('Error guardando ubicación:', err);
@@ -55,14 +58,13 @@ io.on('connection', (socket) => {
     console.log('Cliente desconectado:', socket.id);
   });
 });
-// ---------------------------------------------------
+
+// ---------------- ENDPOINTS REST ----------------
 
 // LOGIN
-app.post('/login', async (req, res) => {
+app.post(`${BASE}/login`, async (req, res) => {
   const { usuario, contrasena } = req.body;
-  if (!usuario || !contrasena) {
-    return res.status(400).json({ error: 'Usuario y contraseña son requeridos' });
-  }
+  if (!usuario || !contrasena) return res.status(400).json({ error: 'Usuario y contraseña son requeridos' });
 
   try {
     const result = await sql`
@@ -72,6 +74,7 @@ app.post('/login', async (req, res) => {
       LIMIT 1
     `;
     if (result.length === 0) return res.status(401).json({ error: 'Usuario no encontrado' });
+
     const user = result[0];
     if (user.contrasena !== contrasena) return res.status(401).json({ error: 'Contraseña incorrecta' });
 
@@ -83,7 +86,7 @@ app.post('/login', async (req, res) => {
 });
 
 // GET /usuarios
-app.get('/usuarios', async (req, res) => {
+app.get(`${BASE}/usuarios`, async (req, res) => {
   try {
     const usuarios = await sql`SELECT usuario, status, ubicacion FROM usuarios`;
     res.json(usuarios);
@@ -94,7 +97,7 @@ app.get('/usuarios', async (req, res) => {
 });
 
 // GET /deliveries
-app.get('/deliveries', async (req, res) => {
+app.get(`${BASE}/deliveries`, async (req, res) => {
   try {
     const deliveries = await sql`
       SELECT id, usuario as nombre,
@@ -110,11 +113,11 @@ app.get('/deliveries', async (req, res) => {
   }
 });
 
-// ENDPOINT PARA PAQUETES
-app.post('/paquetes', async (req, res) => {
+// POST /paquetes
+app.post(`${BASE}/paquetes`, async (req, res) => {
   try {
     const { nombre_repartidor, direccion } = req.body;
-    if (!nombre_repartidor || !direccion) return res.status(400).json({ error: 'Nombre repartidor y ubicación son requeridos' });
+    if (!nombre_repartidor || !direccion) return res.status(400).json({ error: 'Nombre repartidor y dirección son requeridos' });
 
     const [nuevoPaquete] = await sql`
       INSERT INTO paquetes (nombre_repartidor, direccion, status)
@@ -129,7 +132,7 @@ app.post('/paquetes', async (req, res) => {
 });
 
 // GET /paquetes
-app.get('/paquetes', async (req, res) => {
+app.get(`${BASE}/paquetes`, async (req, res) => {
   try {
     const paquetes = await sql`
       SELECT id, nombre_repartidor, direccion, status
@@ -144,7 +147,7 @@ app.get('/paquetes', async (req, res) => {
 });
 
 // PATCH /paquetes/:id
-app.patch('/paquetes/:id', async (req, res) => {
+app.patch(`${BASE}/paquetes/:id`, async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -166,7 +169,7 @@ app.patch('/paquetes/:id', async (req, res) => {
 });
 
 // PATCH /usuarios/:id/status
-app.patch('/usuarios/:id/status', async (req, res) => {
+app.patch(`${BASE}/usuarios/:id/status`, async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
 
@@ -191,5 +194,5 @@ app.patch('/usuarios/:id/status', async (req, res) => {
 
 // ------------------- INICIAR SERVIDOR -------------------
 httpServer.listen(port, () => {
-  console.log(`Backend corriendo en https://72.60.31.237:${port}`);
+  console.log(`Backend corriendo en http://72.60.31.237:${port}${BASE}`);
 });
