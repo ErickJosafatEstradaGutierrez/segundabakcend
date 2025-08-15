@@ -12,17 +12,16 @@ const port = process.env.PORT || 4000;
 // Servidor HTTP para socket.io
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  path: '/socket.io', // ruta limpia para Socket.IO
+  path: '/proyecto2/api/socket.io',
   cors: {
-    origin: ['https://72.60.31.237'],
+    origin: ['http://localhost:4200', 'https://72.60.31.237' ],
     methods: ['GET', 'POST', 'PATCH'],
     credentials: true
   }
 });
 
-// Configuración de CORS
 app.use(cors({
-  origin: 'https://72.60.31.237',
+  origin: 'https://72.60.31.237:4200',
   credentials: true
 }));
 app.use(bodyParser.json());
@@ -31,10 +30,21 @@ app.use(bodyParser.json());
 io.on('connection', (socket) => {
   console.log('Cliente conectado:', socket.id);
 
+  // Recibir ubicación del delivery
   socket.on('updateLocation', async (data) => {
     try {
       const { userId, lat, lng } = data;
-      await sql`UPDATE usuarios SET ubicacion = ${`${lat},${lng}`} WHERE id = ${userId}`;
+
+      // Guardar ubicación en la BD
+      await sql`
+        UPDATE usuarios
+        SET ubicacion = ${`${lat},${lng}`}
+        WHERE id = ${userId}
+      `;
+
+      console.log(`Ubicación actualizada para usuario ${userId}: ${lat}, ${lng}`);
+
+      // Emitir la ubicación a todos los clientes (opcional)
       io.emit('locationUpdated', { userId, lat, lng });
     } catch (err) {
       console.error('Error guardando ubicación:', err);
@@ -47,16 +57,20 @@ io.on('connection', (socket) => {
 });
 // ---------------------------------------------------
 
-// ------------------- ROUTER API -------------------
-const apiRouter = express.Router();
-
 // LOGIN
-apiRouter.post('/login', async (req, res) => {
+app.post('/login', async (req, res) => {
   const { usuario, contrasena } = req.body;
-  if (!usuario || !contrasena) return res.status(400).json({ error: 'Usuario y contraseña son requeridos' });
+  if (!usuario || !contrasena) {
+    return res.status(400).json({ error: 'Usuario y contraseña son requeridos' });
+  }
 
   try {
-    const result = await sql`SELECT usuario, contrasena, rol FROM usuarios WHERE usuario = ${usuario} LIMIT 1`;
+    const result = await sql`
+      SELECT usuario, contrasena, rol
+      FROM usuarios
+      WHERE usuario = ${usuario}
+      LIMIT 1
+    `;
     if (result.length === 0) return res.status(401).json({ error: 'Usuario no encontrado' });
     const user = result[0];
     if (user.contrasena !== contrasena) return res.status(401).json({ error: 'Contraseña incorrecta' });
@@ -68,8 +82,8 @@ apiRouter.post('/login', async (req, res) => {
   }
 });
 
-// USUARIOS
-apiRouter.get('/usuarios', async (req, res) => {
+// GET /usuarios
+app.get('/usuarios', async (req, res) => {
   try {
     const usuarios = await sql`SELECT usuario, status, ubicacion FROM usuarios`;
     res.json(usuarios);
@@ -79,8 +93,8 @@ apiRouter.get('/usuarios', async (req, res) => {
   }
 });
 
-// DELIVERIES
-apiRouter.get('/deliveries', async (req, res) => {
+// GET /deliveries
+app.get('/deliveries', async (req, res) => {
   try {
     const deliveries = await sql`
       SELECT id, usuario as nombre,
@@ -96,8 +110,8 @@ apiRouter.get('/deliveries', async (req, res) => {
   }
 });
 
-// PAQUETES
-apiRouter.post('/paquetes', async (req, res) => {
+// ENDPOINT PARA PAQUETES
+app.post('/paquetes', async (req, res) => {
   try {
     const { nombre_repartidor, direccion } = req.body;
     if (!nombre_repartidor || !direccion) return res.status(400).json({ error: 'Nombre repartidor y ubicación son requeridos' });
@@ -114,9 +128,14 @@ apiRouter.post('/paquetes', async (req, res) => {
   }
 });
 
-apiRouter.get('/paquetes', async (req, res) => {
+// GET /paquetes
+app.get('/paquetes', async (req, res) => {
   try {
-    const paquetes = await sql`SELECT id, nombre_repartidor, direccion, status FROM paquetes ORDER BY id ASC`;
+    const paquetes = await sql`
+      SELECT id, nombre_repartidor, direccion, status
+      FROM paquetes
+      ORDER BY id ASC
+    `;
     res.status(200).json(paquetes);
   } catch (error) {
     console.error('Error al obtener paquetes:', error);
@@ -124,17 +143,21 @@ apiRouter.get('/paquetes', async (req, res) => {
   }
 });
 
-apiRouter.patch('/paquetes/:id', async (req, res) => {
+// PATCH /paquetes/:id
+app.patch('/paquetes/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
     if (!status) return res.status(400).json({ error: 'El campo status es requerido' });
 
     const [paqueteActualizado] = await sql`
-      UPDATE paquetes SET status = ${status} WHERE id = ${id} RETURNING id, nombre_repartidor, direccion, status
+      UPDATE paquetes
+      SET status = ${status}
+      WHERE id = ${id}
+      RETURNING id, nombre_repartidor, direccion, status
     `;
-    if (!paqueteActualizado) return res.status(404).json({ error: 'Paquete no encontrado' });
 
+    if (!paqueteActualizado) return res.status(404).json({ error: 'Paquete no encontrado' });
     res.status(200).json(paqueteActualizado);
   } catch (error) {
     console.error('Error actualizando paquete:', error);
@@ -142,14 +165,21 @@ apiRouter.patch('/paquetes/:id', async (req, res) => {
   }
 });
 
-// USUARIOS STATUS
-apiRouter.patch('/usuarios/:id/status', async (req, res) => {
+// PATCH /usuarios/:id/status
+app.patch('/usuarios/:id/status', async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
+
   if (!['activo', 'off'].includes(status)) return res.status(400).json({ error: 'Estado inválido' });
 
   try {
-    const result = await sql`UPDATE usuarios SET status = ${status} WHERE id = ${id} RETURNING id, usuario, status`;
+    const result = await sql`
+      UPDATE usuarios
+      SET status = ${status}
+      WHERE id = ${id}
+      RETURNING id, usuario, status
+    `;
+
     if (result.length === 0) return res.status(404).json({ error: 'Usuario no encontrado' });
 
     res.json({ message: 'Estado actualizado', usuario: result[0] });
@@ -158,9 +188,6 @@ apiRouter.patch('/usuarios/:id/status', async (req, res) => {
     res.status(500).json({ error: 'Error al actualizar usuario' });
   }
 });
-
-// ------------------- USAR EL ROUTER -------------------
-app.use('/api', apiRouter); // solo aquí se mantiene /api
 
 // ------------------- INICIAR SERVIDOR -------------------
 httpServer.listen(port, () => {
