@@ -12,16 +12,17 @@ const port = process.env.PORT || 4000;
 // Servidor HTTP para socket.io
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  path: '/proyecto2/api/socket.io',
+  path: '/api/socket.io',
   cors: {
-    origin: ['http://localhost:4200', 'https://72.60.31.237' ],
+    origin: ['https://72.60.31.237'],
     methods: ['GET', 'POST', 'PATCH'],
     credentials: true
   }
 });
 
+// Configuración de CORS
 app.use(cors({
-  origin: 'https://72.60.31.237:4200',
+  origin: 'https://72.60.31.237',
   credentials: true
 }));
 app.use(bodyParser.json());
@@ -58,7 +59,7 @@ io.on('connection', (socket) => {
 // ---------------------------------------------------
 
 // LOGIN
-app.post('/login', async (req, res) => {
+app.post('/api/login', async (req, res) => {
   const { usuario, contrasena } = req.body;
   if (!usuario || !contrasena) {
     return res.status(400).json({ error: 'Usuario y contraseña son requeridos' });
@@ -83,7 +84,7 @@ app.post('/login', async (req, res) => {
 });
 
 // GET /usuarios
-app.get('/usuarios', async (req, res) => {
+app.get('/api/usuarios', async (req, res) => {
   try {
     const usuarios = await sql`SELECT usuario, status, ubicacion FROM usuarios`;
     res.json(usuarios);
@@ -94,7 +95,7 @@ app.get('/usuarios', async (req, res) => {
 });
 
 // GET /deliveries
-app.get('/deliveries', async (req, res) => {
+app.get('/api/deliveries', async (req, res) => {
   try {
     const deliveries = await sql`
       SELECT id, usuario as nombre,
@@ -111,7 +112,7 @@ app.get('/deliveries', async (req, res) => {
 });
 
 // ENDPOINT PARA PAQUETES
-app.post('/paquetes', async (req, res) => {
+app.post('/api/paquetes', async (req, res) => {
   try {
     const { nombre_repartidor, direccion } = req.body;
     if (!nombre_repartidor || !direccion) return res.status(400).json({ error: 'Nombre repartidor y ubicación son requeridos' });
@@ -129,7 +130,7 @@ app.post('/paquetes', async (req, res) => {
 });
 
 // GET /paquetes
-app.get('/paquetes', async (req, res) => {
+app.get('/api/paquetes', async (req, res) => {
   try {
     const paquetes = await sql`
       SELECT id, nombre_repartidor, direccion, status
@@ -144,7 +145,7 @@ app.get('/paquetes', async (req, res) => {
 });
 
 // PATCH /paquetes/:id
-app.patch('/paquetes/:id', async (req, res) => {
+app.patch('/api/paquetes/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -166,7 +167,7 @@ app.patch('/paquetes/:id', async (req, res) => {
 });
 
 // PATCH /usuarios/:id/status
-app.patch('/usuarios/:id/status', async (req, res) => {
+app.patch('/api/usuarios/:id/status', async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
 
